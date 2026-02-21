@@ -111,4 +111,4 @@ Open http://localhost:3000 — you're live!
 | Hosting | Render (backend) + Vercel (frontend) |
 
 ---
-> Built by **Prabhu Vandranki** — [LinkedIn](https://www.linkedin.com/in/vandranki-prabhu-kiran-4b75b4215/) · [GitHub](https://github.com/VANDRANKI) | *© 2026 *
+> Built by **Prabhu ** — [LinkedIn](https://www.linkedin.com/in/vandranki-prabhu-kiran-4b75b4215/) · [GitHub](https://github.com/VANDRANKI) | © 2026 
