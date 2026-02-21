@@ -1,7 +1,5 @@
 # Mortgage Credit Risk & Stress Testing Lab
 
-> Built by **Prabhu Vandranki** — [LinkedIn](https://www.linkedin.com/in/vandranki-prabhu-kiran-4b75b4215/) · [GitHub](https://github.com/VANDRANKI)
-
 **Live Demo:** *(add URLs after deployment)*
 
 ---
@@ -113,5 +111,4 @@ Open http://localhost:3000 — you're live!
 | Hosting | Render (backend) + Vercel (frontend) |
 
 ---
-
-*© 2026 Prabhu Vandranki*
+> Built by **Prabhu Vandranki** — [LinkedIn](https://www.linkedin.com/in/vandranki-prabhu-kiran-4b75b4215/) · [GitHub](https://github.com/VANDRANKI) | *© 2026 *

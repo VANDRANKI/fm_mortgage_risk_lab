@@ -10,7 +10,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 from src.api.schemas import ScenarioRequest
-from src.config.settings import DATA_PROCESSED, SCENARIOS
+from src.config.settings import DATA_PROCESSED, SCENARIOS, PORTFOLIO_BASELINE
 from src.models.ecl_engine import ECLEngine
 
 router = APIRouter(prefix="/scenario", tags=["Scenario"])
@@ -34,24 +34,15 @@ def _get_portfolio() -> pd.DataFrame:
     if _PORTFOLIO is not None:
         return _PORTFOLIO
 
-    panel_path = DATA_PROCESSED / "loan_monthly_panel.parquet"
-    if not panel_path.exists():
+    # Use the pre-built slim snapshot (committed to git, 2 MB)
+    snapshot_path = PORTFOLIO_BASELINE / "portfolio_snapshot.parquet"
+    if not snapshot_path.exists():
         raise HTTPException(
             status_code=503,
-            detail="Loan panel not found. Run the ingestion + feature pipeline first.",
+            detail="Portfolio snapshot not found. Run the ingestion + feature pipeline first.",
         )
 
-    panel = pd.read_parquet(panel_path)
-    panel["REPORTING_DATE"] = pd.to_datetime(panel["REPORTING_DATE"])
-
-    # Latest snapshot per loan
-    latest = (
-        panel.sort_values("REPORTING_DATE")
-        .groupby("LOAN_SEQUENCE_NUMBER")
-        .last()
-        .reset_index()
-    )
-    _PORTFOLIO = latest[~latest["IS_ZERO_BALANCE"]].copy()
+    _PORTFOLIO = pd.read_parquet(snapshot_path)
     log.info("Portfolio loaded: %d active loans", len(_PORTFOLIO))
     return _PORTFOLIO
 

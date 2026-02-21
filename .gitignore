@@ -24,6 +24,7 @@ data/processed/*
 data/processed/portfolio_baseline/*
 !data/processed/portfolio_baseline/all_scenarios.json
 !data/processed/portfolio_baseline/vintage_curves.parquet
+!data/processed/portfolio_baseline/portfolio_snapshot.parquet
 
 # data/macro — ignore everything EXCEPT the small macro parquet (16 KB)
 data/macro/*
