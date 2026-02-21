@@ -1,0 +1,48 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+
+# ── Raw Freddie Mac data (large & not redistributable) ────────────────────────
+data/raw/
+
+# ── Large interim & processed files ──────────────────────────────────────────
+data/interim/
+
+# data/processed — ignore everything EXCEPT the small portfolio_baseline artefacts
+data/processed/*
+!data/processed/portfolio_baseline
+data/processed/portfolio_baseline/*
+!data/processed/portfolio_baseline/all_scenarios.json
+!data/processed/portfolio_baseline/vintage_curves.parquet
+
+# data/macro — ignore everything EXCEPT the small macro parquet (16 KB)
+data/macro/*
+!data/macro/fred_macro.parquet
+
+logs/
+
+# ── Model files — exclude only the large Random Forest (8.4 MB) ──────────────
+models/pd_12m_rf.joblib
+
+# ── Reports ───────────────────────────────────────────────────────────────────
+reports/figures/*.png
+
+# ── Node / Next.js ────────────────────────────────────────────────────────────
+fm-risk-lab-web/node_modules/
+fm-risk-lab-web/.next/
+fm-risk-lab-web/.env.local
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
