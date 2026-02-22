@@ -1,17 +1,17 @@
 # Mortgage Credit Risk & Stress Testing Lab
 
-**Live Demo:** *(add URLs after deployment)*
+**Live Demo:** *https://fm-mortgage-risk-lab.vercel.app/*
 
 ---
 
-## What is this project?
+## About this project?
 
-Imagine a bank gives out thousands of home loans. Some people will miss payments and default. The bank needs to know **how much money it might lose** — this is called the **Expected Credit Loss (ECL)**.
+Just imagine a bank gives out thousands of home loans. Some people will miss payments and default. The bank needs to know **how much money it might lose** : this is called the **Expected Credit Loss (ECL)**.
 
 This project builds a full system that:
 1. Takes **real mortgage data** from Freddie Mac (350,000 loans, 2010–2016)
 2. Trains **machine learning models** to predict who will default and how much will be lost
-3. Lets you **simulate bad economic scenarios** — what if unemployment doubles? what if home prices crash by 30%?
+3. Lets you **simulate bad economic scenarios** : what if unemployment doubles? what if home prices crash by 30%?
 4. Shows everything on a **live website dashboard** with charts and sliders
 
 ---
@@ -36,7 +36,7 @@ Next.js website shows it all in real-time with interactive sliders
 
 ---
 
-## The 4 stress scenarios
+## The 4 stress scenarios used
 
 | Scenario | Unemployment rise | Home prices | ECL result |
 |----------|-------------------|-------------|------------|
@@ -83,7 +83,7 @@ npm install
 node node_modules/next/dist/bin/next dev --port 3000
 ```
 
-Open http://localhost:3000 — you're live!
+Open http://localhost:3000 : Done, you're live!
 
 ---
 
@@ -91,7 +91,7 @@ Open http://localhost:3000 — you're live!
 
 | Page | What it shows |
 |------|---------------|
-| **Portfolio** | Overall risk summary — total ECL, PD, LGD, loan count |
+| **Portfolio** | Overall risk summary : total ECL, PD, LGD, loan count |
 | **Risk Lab** | Move sliders to shock the economy and see ECL change live |
 | **Loan Explorer** | Enter a single loan's details and get its risk score |
 | **Methodology** | How the models work, what data was used |
@@ -111,4 +111,4 @@ Open http://localhost:3000 — you're live!
 | Hosting | Render (backend) + Vercel (frontend) |
 
 ---
-> Built by **Prabhu ** — [LinkedIn](https://www.linkedin.com/in/vandranki-prabhu-kiran-4b75b4215/) · [GitHub](https://github.com/VANDRANKI) | © 2026 
+> Built by Prabhu : [LinkedIn](https://www.linkedin.com/in/vandranki-prabhu-kiran-4b75b4215/) · [GitHub](https://github.com/VANDRANKI) | © 2026 
