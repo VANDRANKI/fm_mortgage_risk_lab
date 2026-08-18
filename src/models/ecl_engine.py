@@ -313,22 +313,25 @@ class ECLEngine:
             g["ecl_rate"] = g["ecl"] / g["ead"].replace(0, np.nan)
             return g.to_dict(orient="records")
 
-        fico_bands = pd.cut(
-            df["CREDIT_SCORE"].fillna(650),
-            bins=[0, 620, 660, 700, 740, 800, 900],
-            labels=["<620", "620-659", "660-699", "700-739", "740-799", "800+"],
-        )
-        df["FICO_BAND"] = fico_bands
+        # Only band the columns that are actually present. agg_by already returns
+        # an empty list for a missing segment, but pd.cut runs first and would
+        # raise KeyError before that guard is ever reached.
+        if "CREDIT_SCORE" in df.columns:
+            df["FICO_BAND"] = pd.cut(
+                df["CREDIT_SCORE"].fillna(650),
+                bins=[0, 620, 660, 700, 740, 800, 900],
+                labels=["<620", "620-659", "660-699", "700-739", "740-799", "800+"],
+            )
 
-        ltv_bands = pd.cut(
-            df["ORIGINAL_LTV"].fillna(80),
-            bins=[0, 60, 70, 80, 90, 100, 200],
-            labels=["<60", "60-69", "70-79", "80-89", "90-99", "100+"],
-        )
-        df["LTV_BAND"] = ltv_bands
+        if "ORIGINAL_LTV" in df.columns:
+            df["LTV_BAND"] = pd.cut(
+                df["ORIGINAL_LTV"].fillna(80),
+                bins=[0, 60, 70, 80, 90, 100, 200],
+                labels=["<60", "60-69", "70-79", "80-89", "90-99", "100+"],
+            )
 
         stage_summary = (
-            df.groupby("ifrs9_stage")
+            df.groupby("ifrs9_stage", observed=True)
             .agg(
                 loan_count=("ecl", "count"),
                 ead=("ead", "sum"),
