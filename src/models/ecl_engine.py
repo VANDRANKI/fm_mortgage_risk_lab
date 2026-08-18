@@ -26,10 +26,18 @@ from src.config.settings import MODELS_DIR, DATA_MACRO
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
 
-# Delinquency thresholds for IFRS 9 staging
-STAGE1_MAX_DLQ = 0    # Current or 1-29 dpd
-STAGE2_MAX_DLQ = 60   # 30-89 dpd (significant increase in credit risk)
-# Stage 3: 90+ dpd or in workout
+# IFRS 9 staging thresholds.
+#
+# DLQ_STATUS_INT is Freddie Mac's months-delinquent code, not days:
+#   0 = current, 1 = 30-59 dpd, 2 = 60-89 dpd, 3 = 90+ dpd
+# The previous constants here were expressed in days (0 and 60) while the
+# classifier compared months, so they could not be used as written.
+STAGE2_MIN_DLQ = 1     # 30+ dpd: significant increase in credit risk
+STAGE3_MIN_DLQ = 3     # 90+ dpd: credit impaired
+
+# PD thresholds applied alongside delinquency
+STAGE2_MIN_PD = 0.01
+STAGE3_MIN_PD = 0.10
 
 
 class ECLEngine:
@@ -211,15 +219,20 @@ class ECLEngine:
     def classify_ifrs9_stage(self, df: pd.DataFrame, pd_arr: np.ndarray) -> np.ndarray:
         """
         Assign IFRS 9 stage based on delinquency and PD increase.
-          Stage 1: PD < 1% and DLQ < 30dpd  → 12-month ECL
-          Stage 2: PD 1-10% or DLQ 30-89dpd → Lifetime ECL
-          Stage 3: PD > 10% or DLQ 90+ dpd  → Lifetime ECL (impaired)
+
+          Stage 1: PD < 1% and current          -> 12-month ECL
+          Stage 2: PD 1-10% or 30-89 dpd        -> lifetime ECL
+          Stage 3: PD > 10% or 90+ dpd          -> lifetime ECL (impaired)
+
+        Delinquency is read from DLQ_STATUS_INT, which counts months
+        delinquent (0 current, 1 is 30-59 dpd, 3 is 90+ dpd), so the
+        thresholds are compared in months, not days.
         """
         dlq = df.get("DLQ_STATUS_INT", pd.Series(np.zeros(len(df)))).fillna(0)
         stages = np.where(
-            (pd_arr > 0.10) | (dlq >= 3),  3,
+            (pd_arr > STAGE3_MIN_PD) | (dlq >= STAGE3_MIN_DLQ), 3,
             np.where(
-                (pd_arr > 0.01) | (dlq >= 1), 2, 1
+                (pd_arr > STAGE2_MIN_PD) | (dlq >= STAGE2_MIN_DLQ), 2, 1
             )
         )
         return stages
