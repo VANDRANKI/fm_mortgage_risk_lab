@@ -131,9 +131,11 @@ class ECLEngine:
     def _heuristic_lgd(self, df: pd.DataFrame, macro: pd.Series) -> np.ndarray:
         """Simple LTV-based LGD heuristic."""
         ltv      = df.get("ORIGINAL_LTV",     pd.Series([80] * len(df))).fillna(80)
-        hpi_chg  = macro.get("hpi_yoy_chg",  0.0)
-        # Stressed LTV = original LTV / (1 + HPI change %)
-        stressed_ltv = ltv / (1 + hpi_chg / 100).clip(0.5, 1.5)
+        hpi_chg  = float(macro.get("hpi_yoy_chg", 0.0))
+        # Stressed LTV = original LTV / (1 + HPI change %).
+        # np.clip rather than .clip: when hpi_yoy_chg is absent from the macro
+        # series the default is a plain Python float, which has no .clip method.
+        stressed_ltv = ltv / np.clip(1 + hpi_chg / 100, 0.5, 1.5)
         # LGD ≈ max(0, stressed LTV – 1) + expenses buffer
         lgd = (stressed_ltv / 100 - 0.85).clip(0, 0.8) + 0.15
         return lgd.clip(0.05, 0.90).values
@@ -250,8 +252,16 @@ class ECLEngine:
         # EAD
         if ead_col in result.columns:
             result["ead"] = result[ead_col].fillna(result.get("ORIGINAL_UPB", 0)).fillna(0)
+        elif "ORIGINAL_UPB" in result.columns:
+            result["ead"] = result["ORIGINAL_UPB"].fillna(0)
         else:
-            result["ead"] = result.get("ORIGINAL_UPB", 0).fillna(0)
+            # DataFrame.get returns the default itself when the column is absent,
+            # so calling .fillna on it raises AttributeError on a bare int.
+            log.warning(
+                "No exposure column found (neither %s nor ORIGINAL_UPB); EAD set to 0.",
+                ead_col,
+            )
+            result["ead"] = 0.0
 
         # PD
         result["pd_pred"] = self.predict_pd(result, macro).clip(0, 1)
