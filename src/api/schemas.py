@@ -40,10 +40,15 @@ class LoanPredictRequest(BaseModel):
     channel:                str     = Field("R",    description="R=Retail, B=Broker, C=Correspondent")
     first_time_homebuyer:   str     = Field("N",    description="Y/N")
     mi_pct:                 float   = Field(0.0,    ge=0,   le=35)
-    # Macro overrides (optional)
-    unemployment_shock:     float   = Field(0.0)
-    hpi_shock:              float   = Field(0.0)
-    rate_shock:             float   = Field(0.0)
+    # Macro overrides (optional). Bounds match ScenarioRequest, which stresses
+    # the same three quantities: unemployment_shock in percentage points, hpi_shock
+    # in percentage points of YoY change, rate_shock in percentage points. Without
+    # them this endpoint accepted an unbounded shock (e.g. unemployment_shock=1e6)
+    # and returned a saturated PD near 1.0 or an LGD clipped to its floor/ceiling
+    # instead of the 422 that /scenario/run already gives for the same input.
+    unemployment_shock:     float   = Field(0.0, ge=-5, le=20)
+    hpi_shock:              float   = Field(0.0, ge=-50, le=20)
+    rate_shock:             float   = Field(0.0, ge=-3, le=10)
 
 
 class LoanPredictResponse(BaseModel):
