@@ -38,6 +38,32 @@ def _parse_date_col(series: pd.Series, name: str) -> pd.Series:
     return pd.to_datetime(cleaned, format="%Y%m", errors="coerce")
 
 
+# LOAN_PURPOSE keeps "9" as a real value: it is a "not applicable / other" code
+# in some vintage years, not a missing sentinel like it is on every other
+# string column here.
+_NO_SENTINEL_NINE_COLS = {"LOAN_PURPOSE"}
+
+
+def _clean_string_columns(df: pd.DataFrame, str_cols: list[str]) -> pd.DataFrame:
+    """Strip whitespace and map blank/"9"/"99" sentinels to missing.
+
+    Split out of load_orig_year so it can be unit tested without a synthetic
+    raw file: a prior version applied the "9"/"99" sentinel rule to every
+    column in str_cols including LOAN_PURPOSE, then tried to undo it for
+    LOAN_PURPOSE with a second `.replace("", pd.NA)` call. That second call
+    cannot recover a value that has already become <NA>, so the "9" was lost
+    silently on every row regardless of the attempted fix.
+    """
+    for col in str_cols:
+        if col not in df.columns:
+            continue
+        if col in _NO_SENTINEL_NINE_COLS:
+            df[col] = df[col].str.strip().replace("", pd.NA)
+        else:
+            df[col] = df[col].str.strip().replace({"": pd.NA, "9": pd.NA, "99": pd.NA})
+    return df
+
+
 def load_orig_year(year: int) -> pd.DataFrame:
     """Load a single origination year, returning a cleaned DataFrame."""
     path = DATA_RAW / f"sample_orig_{year}.txt"
@@ -104,13 +130,7 @@ def load_orig_year(year: int) -> pd.DataFrame:
         "PROPERTY_VALUATION_METHOD", "IO_INDICATOR", "MI_CANCELLATION_INDICATOR",
         "MSA",
     ]
-    for col in str_cols:
-        if col in df.columns:
-            df[col] = df[col].str.strip().replace({"": pd.NA, "9": pd.NA, "99": pd.NA})
-
-    # Keep loan purpose '9' as unknown (it's a real code in some years)
-    # Restore if stripped
-    df["LOAN_PURPOSE"] = df["LOAN_PURPOSE"].str.strip().replace("", pd.NA)
+    df = _clean_string_columns(df, str_cols)
 
     # ── Add vintage year ──────────────────────────────────────────────────────
     df["VINTAGE_YEAR"] = year
