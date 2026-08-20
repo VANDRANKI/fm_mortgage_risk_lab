@@ -29,6 +29,13 @@ from pathlib import Path
 # Make src importable when running from project root
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Must exist before FileHandler opens logs/pipeline.log below. This used to be
+# created inside main(), which runs after logging.basicConfig has already
+# tried to open the file, so a genuinely fresh clone (no logs/ directory
+# committed) raised FileNotFoundError before main() ever started, on the
+# script's own default entry point.
+Path("logs").mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -60,8 +67,6 @@ def main():
     args = parser.parse_args()
 
     sf = args.start_from
-
-    Path("logs").mkdir(exist_ok=True)
 
     # ── Stage 1: Ingest origination ──────────────────────────────────────────
     from src.ingest.load_orig import load_all_orig_years
