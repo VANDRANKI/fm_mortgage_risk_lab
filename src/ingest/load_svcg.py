@@ -13,7 +13,8 @@ import pandas as pd
 from src.config.settings import (
     DATA_RAW, DATA_INTERIM, VINTAGE_YEARS,
     SVCG_COLS, SVCG_DTYPES,
-    SERIOUS_DELINQUENCY_CODES,
+    SERIOUS_DELINQUENCY_MONTHS_THRESHOLD,
+    SERIOUS_DELINQUENCY_NON_NUMERIC_CODES,
     LIQUIDATION_ZERO_BALANCE_CODES,
     PREPAYMENT_ZERO_BALANCE_CODE,
 )
@@ -43,6 +44,24 @@ def _parse_reporting_period(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series.str.strip(), format="%Y%m", errors="coerce")
 
 
+def _is_seriously_delinquent(dlq: pd.Series) -> pd.Series:
+    """Flag 90+ days delinquent (3+ months) or a foreclosure/REO status code.
+
+    CURRENT_LOAN_DELINQUENCY_STATUS is an unpadded count of months delinquent
+    that keeps counting past single digits for a loan that stays delinquent
+    300+ days: "10", "11", "24" and so on. A fixed string set can only ever
+    match single characters, so those loans, which are further past due than
+    the "3" (90dpd) already included, were silently excluded. Parsing the
+    numeric part and comparing it to the threshold handles any month count,
+    and the non-numeric codes ("XX" unknown, "RA" REO acquisition) are still
+    matched by their literal string.
+    """
+    months = pd.to_numeric(dlq, errors="coerce")
+    return (months >= SERIOUS_DELINQUENCY_MONTHS_THRESHOLD) | dlq.isin(
+        SERIOUS_DELINQUENCY_NON_NUMERIC_CODES
+    )
+
+
 def _process_chunk(chunk: pd.DataFrame, vintage_year: int) -> pd.DataFrame:
     """Clean and enrich a single chunk of servicing data."""
     # ── Cast numeric columns ──────────────────────────────────────────────────
@@ -70,7 +89,7 @@ def _process_chunk(chunk: pd.DataFrame, vintage_year: int) -> pd.DataFrame:
     dlq_clean = chunk["CURRENT_LOAN_DELINQUENCY_STATUS"].fillna("").str.upper()
     zb_clean   = chunk["ZERO_BALANCE_CODE"].fillna("").str.strip()
 
-    chunk["IS_SERIOUSLY_DELINQUENT"] = dlq_clean.isin(SERIOUS_DELINQUENCY_CODES)
+    chunk["IS_SERIOUSLY_DELINQUENT"] = _is_seriously_delinquent(dlq_clean)
     chunk["IS_ZERO_BALANCE"]  = zb_clean.ne("")
     chunk["IS_PREPAID"]       = zb_clean.eq(PREPAYMENT_ZERO_BALANCE_CODE)
     chunk["IS_LIQUIDATED"]    = zb_clean.isin(LIQUIDATION_ZERO_BALANCE_CODES)

@@ -170,8 +170,19 @@ SVCG_DTYPES = {
 
 # ── Business definitions ──────────────────────────────────────────────────────
 # Delinquency: '0'=Current, '1'=30dpd, '2'=60dpd, '3'=90dpd, etc., 'XX'=Unknown/Foreclosure
+#
+# The numeric part is an UNPADDED count of months delinquent and keeps counting
+# past single digits for a loan that stays delinquent 300+ days, which happens
+# routinely for this repo's 2010-2011 vintages given GFC-era foreclosure
+# timelines. A fixed string set of "3".."9" can only ever match single
+# characters, so "10", "11", "24" etc. (10 to 24+ months delinquent, all far
+# past the 90dpd mark that already qualifies "3") silently fail the isin()
+# check that used to gate IS_SERIOUSLY_DELINQUENT in load_svcg.py. A numeric
+# threshold is used there instead so it does not stop working past 9 months.
 SERIOUS_DELINQUENCY_CODES = {"3", "4", "5", "6", "7", "8", "9",
                               "XX", "RA"}  # 90+dpd or in foreclosure/REO
+SERIOUS_DELINQUENCY_MONTHS_THRESHOLD = 3  # 90+ days = 3+ months delinquent
+SERIOUS_DELINQUENCY_NON_NUMERIC_CODES = {"XX", "RA"}
 
 # Zero Balance Codes meaning loss/liquidation (not voluntary payoff)
 LIQUIDATION_ZERO_BALANCE_CODES = {"02", "03", "04", "05", "06", "09"}
