@@ -91,6 +91,31 @@ def _ks_statistic(y_true: np.ndarray, y_prob: np.ndarray) -> float:
     return float(np.max(tpr - fpr))
 
 
+def build_calibrated_pipeline(fitted_preprocessor, X_val_transformed, y_val, fitted_clf) -> Pipeline:
+    """Assemble the deployed calibrated pipeline from two already-fitted pieces.
+
+    fitted_preprocessor must already be fit on the training split, and
+    X_val_transformed must be the validation features passed through that same
+    fitted preprocessor, so the calibrator sees exactly the feature space
+    fitted_clf's trees were trained on.
+
+    The returned Pipeline's own .fit() is never called and must not be called
+    by the caller either. Pipeline.fit() refits every non-final step, which
+    would refit the ColumnTransformer on X_val instead of reusing the fit from
+    X_train. Beyond duplicating work, refitting on a smaller or differently
+    distributed split (a single validation vintage year here, versus a
+    multi-year training window) can see a narrower set of categories per
+    categorical column. OneHotEncoder(handle_unknown="ignore") then produces a
+    narrower transformed width than the classifier expects, which raises a
+    feature-count mismatch before a single production prediction is made, or
+    silently drops information for any category absent from the validation
+    split at serving time if the width happens to still match.
+    """
+    calibrated_clf = CalibratedClassifierCV(fitted_clf, cv="prefit", method="isotonic")
+    calibrated_clf.fit(X_val_transformed, y_val)
+    return Pipeline([("pre", fitted_preprocessor), ("clf", calibrated_clf)])
+
+
 def _evaluate(name: str, model, X: pd.DataFrame, y: pd.Series) -> dict:
     prob = model.predict_proba(X)[:, 1]
     auc  = roc_auc_score(y, prob)
@@ -219,16 +244,13 @@ def train_pd_models(dataset_name: str = "pd_12m") -> None:
     )
     log.info("  Best XGB iteration: %d", xgb_clf.best_iteration)
 
-    # Wrap in calibrated pipeline for well-calibrated PD
-    xgb_pipe_final = Pipeline([
-        ("pre", pre),
-        ("clf", CalibratedClassifierCV(xgb_clf, cv="prefit", method="isotonic")),
-    ])
-    # Calibrate on validation set
-    X_val_transformed = pre.fit_transform(X_train)  # pre is already fitted via pre_fitted
-    # Re-use pre from pre_fitted for the final pipeline
-    xgb_pipe_final.steps[0] = ("pre", pre_fitted.named_steps["pre"])
-    xgb_pipe_final.fit(X_val, y_val)
+    # Wrap in a calibrated pipeline for well-calibrated PD. See
+    # build_calibrated_pipeline's docstring for why this must not call .fit()
+    # on the assembled Pipeline: doing so used to silently refit the
+    # preprocessor on X_val instead of reusing the fit from X_train.
+    xgb_pipe_final = build_calibrated_pipeline(
+        pre_fitted.named_steps["pre"], X_val_t, y_val, xgb_clf
+    )
     joblib.dump(xgb_pipe_final, MODELS_DIR / f"{dataset_name}_xgb.joblib")
 
     # Also save raw XGBoost for feature importance
