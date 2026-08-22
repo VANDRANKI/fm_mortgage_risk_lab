@@ -50,6 +50,39 @@ SVCG_KEEP = [
 ]
 
 
+def _build_default_flags(loan_ids: pd.Series, first_default_index, liquidated_index) -> pd.Series:
+    """A loan counts as "defaulted" if it was ever seriously delinquent (3+
+    months / foreclosure code) OR if it reached a liquidation zero-balance
+    code at all.
+
+    Some loans move straight from a low delinquency count to a short sale,
+    deed-in-lieu, or third-party sale zero-balance code without ever
+    accumulating 3+ months of *reported* delinquency (a lender-agreed
+    hardship resolution, or a reporting lag on the final month). Before this
+    fix, `defaulted` only looked at first_default (IS_SERIOUSLY_DELINQUENT
+    history), so such a loan had liquidated=True but defaulted=False, and
+    build_lgd_dataset.py requires defaulted=True before a loan's observed LGD
+    is admitted to the training set -- silently dropping a genuine,
+    fully-computed loss record instead of training on it.
+    """
+    defaulted_set = set(first_default_index) | set(liquidated_index)
+    return loan_ids.isin(defaulted_set)
+
+
+def _fill_missing_default_timing(
+    time_to_default: pd.Series, zero_balance_age: pd.Series, liquidated: pd.Series
+) -> pd.Series:
+    """Fall back to the loan age at its zero-balance (liquidation) event for
+    loans that defaulted only via liquidation (see _build_default_flags) and
+    therefore have no IS_SERIOUSLY_DELINQUENT-based time_to_default_months.
+    That age is the best available proxy for "time to default" for those
+    loans, and feeds LOAN_AGE_AT_DEFAULT / the macro-at-default lookup in
+    build_lgd_dataset.py. Non-liquidated loans are left untouched -- there is
+    no zero-balance event to fall back to.
+    """
+    return time_to_default.fillna(zero_balance_age.where(liquidated))
+
+
 def build_monthly_panel() -> Path:
     """Merge origination and servicing data into a monthly panel."""
     log.info("Building monthly loan panel ...")
@@ -217,11 +250,12 @@ def build_loan_outcomes() -> Path:
     outcomes = orig.copy()
 
     # Boolean outcome flags
-    defaulted_set = set(first_default.index)
     prepaid_set   = set(first_prepay.index)
     liq_set       = set(lgd_summary.index)
 
-    outcomes["defaulted"]   = outcomes["LOAN_SEQUENCE_NUMBER"].isin(defaulted_set)
+    outcomes["defaulted"]   = _build_default_flags(
+        outcomes["LOAN_SEQUENCE_NUMBER"], first_default.index, liq_set
+    )
     outcomes["prepaid"]     = outcomes["LOAN_SEQUENCE_NUMBER"].isin(prepaid_set)
     outcomes["liquidated"]  = outcomes["LOAN_SEQUENCE_NUMBER"].isin(liq_set)
 
@@ -236,6 +270,15 @@ def build_loan_outcomes() -> Path:
     outcomes = outcomes.join(mod_flag,  on="LOAN_SEQUENCE_NUMBER")
     outcomes = outcomes.join(max_dlq,   on="LOAN_SEQUENCE_NUMBER")
     outcomes = outcomes.join(zb_summary, on="LOAN_SEQUENCE_NUMBER")
+
+    # Loans that only defaulted via liquidation (no IS_SERIOUSLY_DELINQUENT
+    # history) have no time_to_default_months from the first_default join;
+    # fall back to their zero-balance age.
+    outcomes["time_to_default_months"] = _fill_missing_default_timing(
+        outcomes["time_to_default_months"],
+        outcomes["zero_balance_age_months"],
+        outcomes["liquidated"],
+    )
 
     # Observation period (latest month seen for this loan)
     latest_obs = (
