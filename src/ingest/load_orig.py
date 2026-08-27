@@ -26,9 +26,20 @@ MISSING_SENTINELS = {
 }
 
 # Numeric cols that need explicit NaN replacement for sentinels
+#
+# ORIGINAL_LTV and ORIGINAL_CLTV use the same 999 "not available" sentinel as
+# ORIGINAL_DTI per the Freddie Mac layout, but were missing from this map.
+# A loan with a genuinely missing LTV/CLTV kept the literal value 999 (i.e.
+# 999% LTV) instead of becoming NaN, so it was fed straight into the PD/LGD
+# models as a wild numeric outlier -- and into ecl_engine's LTV banding,
+# where pd.cut(bins=[...,100,200]) silently drops it as unbanded, since 999
+# is outside every bin -- rather than being median-imputed like every other
+# missing numeric feature.
 SENTINEL_MAP = {
     "CREDIT_SCORE":       9999,
     "ORIGINAL_DTI":       999,
+    "ORIGINAL_LTV":       999,
+    "ORIGINAL_CLTV":      999,
 }
 
 
@@ -42,6 +53,20 @@ def _parse_date_col(series: pd.Series, name: str) -> pd.Series:
 # in some vintage years, not a missing sentinel like it is on every other
 # string column here.
 _NO_SENTINEL_NINE_COLS = {"LOAN_PURPOSE"}
+
+
+def _replace_numeric_sentinels(df: pd.DataFrame, sentinel_map: dict[str, int]) -> pd.DataFrame:
+    """Replace Freddie Mac's "not available" sentinel values with NaN.
+
+    Split out of load_orig_year so it can be unit tested without a synthetic
+    raw file, the same way _clean_string_columns is. Columns must already be
+    numeric (see load_orig_year's `pd.to_numeric` cast) before this runs.
+    """
+    for col, sentinel in sentinel_map.items():
+        if col not in df.columns:
+            continue
+        df.loc[df[col] == sentinel, col] = pd.NA
+    return df
 
 
 def _clean_string_columns(df: pd.DataFrame, str_cols: list[str]) -> pd.DataFrame:
@@ -95,8 +120,7 @@ def load_orig_year(year: int) -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # ── Replace sentinel missing values ───────────────────────────────────────
-    for col, sentinel in SENTINEL_MAP.items():
-        df.loc[df[col] == sentinel, col] = pd.NA
+    df = _replace_numeric_sentinels(df, SENTINEL_MAP)
 
     # ── Cast final dtypes ─────────────────────────────────────────────────────
     int_cols = {
