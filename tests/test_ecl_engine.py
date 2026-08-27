@@ -147,6 +147,39 @@ class TestPortfolioAggregation:
         out = engine.compute_portfolio_ecl(df)
         assert np.isfinite(out["ecl_rate"])
 
+    def test_fico_band_boundaries_match_their_labels(self, engine):
+        """Regression: pd.cut defaults to right-inclusive bins, so a credit
+        score of exactly 660 fell into the "620-659" bucket instead of
+        "660-699" (and 700 into "660-699", 740 into "700-739", 800 into
+        "740-799") -- every band boundary was mislabeled one band low."""
+        df = pd.DataFrame({
+            "CREDIT_SCORE": [660, 700, 740, 800],
+            "ORIGINAL_UPB": [100_000.0] * 4,
+        })
+        out = engine.compute_portfolio_ecl(df)
+        band_labels = {b["FICO_BAND"] for b in out["by_fico_band"]}
+        assert "660-699" in band_labels
+        assert "700-739" in band_labels
+        assert "740-799" in band_labels
+        assert "800+" in band_labels
+        # None of the boundary scores should have spilled into the band below.
+        assert "620-659" not in band_labels
+
+    def test_ltv_band_boundaries_match_their_labels(self, engine):
+        """Same right-inclusive-bin bug as FICO_BAND: an LTV of exactly 70,
+        80, 90, or 100 fell into the band below its label."""
+        df = pd.DataFrame({
+            "ORIGINAL_LTV": [70.0, 80.0, 90.0, 100.0],
+            "ORIGINAL_UPB": [100_000.0] * 4,
+        })
+        out = engine.compute_portfolio_ecl(df)
+        band_labels = {b["LTV_BAND"] for b in out["by_ltv_band"]}
+        assert "70-79" in band_labels
+        assert "80-89" in band_labels
+        assert "90-99" in band_labels
+        assert "100+" in band_labels
+        assert "60-69" not in band_labels
+
 
 class TestScenario:
     def test_shocks_are_additive(self, engine):

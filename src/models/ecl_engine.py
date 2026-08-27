@@ -329,11 +329,20 @@ class ECLEngine:
         # Only band the columns that are actually present. agg_by already returns
         # an empty list for a missing segment, but pd.cut runs first and would
         # raise KeyError before that guard is ever reached.
+        #
+        # right=False is required here: pd.cut defaults to right-inclusive bins,
+        # e.g. bins=[..., 620, 660, ...] would produce the interval (620, 660]
+        # for the "620-659" label, so a credit score of exactly 660 fell into
+        # "620-659" instead of "660-699" (and likewise 700 into "660-699", 740
+        # into "700-739", etc. -- every boundary score mislabeled one band low).
+        # right=False makes the intervals [620, 660), [660, 700), ... which
+        # actually match the printed labels.
         if "CREDIT_SCORE" in df.columns:
             df["FICO_BAND"] = pd.cut(
                 df["CREDIT_SCORE"].fillna(650),
                 bins=[0, 620, 660, 700, 740, 800, 900],
                 labels=["<620", "620-659", "660-699", "700-739", "740-799", "800+"],
+                right=False,
             )
 
         if "ORIGINAL_LTV" in df.columns:
@@ -341,6 +350,7 @@ class ECLEngine:
                 df["ORIGINAL_LTV"].fillna(80),
                 bins=[0, 60, 70, 80, 90, 100, 200],
                 labels=["<60", "60-69", "70-79", "80-89", "90-99", "100+"],
+                right=False,
             )
 
         stage_summary = (
