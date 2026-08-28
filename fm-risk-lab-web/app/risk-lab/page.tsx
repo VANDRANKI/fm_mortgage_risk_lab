@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ScenarioSlider from "@/components/ScenarioSlider";
 import KpiCard from "@/components/KpiCard";
 import { api, ScenarioResult } from "@/lib/api";
-import { fmtCurrency, fmtPct } from "@/lib/utils";
+import { fmtCurrency, fmtPct, scenarioDeltaMessage } from "@/lib/utils";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -196,15 +196,20 @@ export default function RiskLabPage() {
 
                 {/* Micro-copy */}
                 <div className="card text-xs text-gray-400 leading-relaxed">
-                  {delta_pct === 0 && (
-                    <span>This is the <strong className="text-[#22d3ee]">baseline</strong> scenario with no macro shocks applied.</span>
-                  )}
-                  {delta_pct > 0 && delta_pct < 30 && (
-                    <span>Under this scenario, expected losses rise by <strong className="text-[#f59e0b]">{delta_pct.toFixed(1)}%</strong> compared to baseline—consistent with a <strong className="text-gray-200">mild stress</strong> environment.</span>
-                  )}
-                  {delta_pct >= 30 && (
-                    <span>Under this scenario, expected losses surge by <strong className="text-[#ef4444]">{delta_pct.toFixed(1)}%</strong> vs baseline—this represents <strong className="text-gray-200">severe stress</strong> requiring significant capital buffer.</span>
-                  )}
+                  {(() => {
+                    const msg = scenarioDeltaMessage(delta_pct);
+                    const toneColor: Record<typeof msg.tone, string> = {
+                      baseline: "text-[#22d3ee]",
+                      improved: "text-emerald-400",
+                      mild:     "text-[#f59e0b]",
+                      severe:   "text-[#ef4444]",
+                    };
+                    return (
+                      <span>
+                        <strong className={toneColor[msg.tone]}>{msg.text}</strong>
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {/* ECL by FICO band */}

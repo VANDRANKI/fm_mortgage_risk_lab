@@ -44,3 +44,47 @@ export function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: numb
     timer = setTimeout(() => fn(...args), ms);
   }) as T;
 }
+
+export type ScenarioDeltaTone = "baseline" | "improved" | "mild" | "severe";
+
+export interface ScenarioDeltaMessage {
+  tone: ScenarioDeltaTone;
+  text: string;
+}
+
+/**
+ * Explain a scenario's ECL change vs baseline in plain language.
+ *
+ * The risk-lab page's HPI slider runs from -40 to +10, and unemployment/rate
+ * shocks bottom out at 0, so baseline (all shocks at 0) is not the minimum
+ * reachable ECL: moving the HPI slider to any negative value alone (a
+ * completely ordinary interaction -- it is the primary control on this page)
+ * produces a negative ecl_delta_pct. The three-branch version of this used to
+ * only handle ==0, (0, 30), and >=30, so a negative delta matched none of
+ * them and the explanatory card rendered nothing at all instead of telling
+ * the user their scenario is more favorable than baseline.
+ */
+export function scenarioDeltaMessage(deltaPct: number): ScenarioDeltaMessage {
+  if (deltaPct === 0) {
+    return {
+      tone: "baseline",
+      text: "This is the baseline scenario with no macro shocks applied.",
+    };
+  }
+  if (deltaPct < 0) {
+    return {
+      tone: "improved",
+      text: `Under this scenario, expected losses fall by ${Math.abs(deltaPct).toFixed(1)}% compared to baseline, reflecting more favorable macro conditions than the baseline assumptions.`,
+    };
+  }
+  if (deltaPct < 30) {
+    return {
+      tone: "mild",
+      text: `Under this scenario, expected losses rise by ${deltaPct.toFixed(1)}% compared to baseline, consistent with a mild stress environment.`,
+    };
+  }
+  return {
+    tone: "severe",
+    text: `Under this scenario, expected losses surge by ${deltaPct.toFixed(1)}% vs baseline, this represents severe stress requiring significant capital buffer.`,
+  };
+}
