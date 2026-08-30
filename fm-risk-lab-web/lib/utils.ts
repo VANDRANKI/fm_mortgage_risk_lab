@@ -27,6 +27,22 @@ export function riskColor(level: string): string {
   return map[level] ?? "text-gray-400";
 }
 
+/**
+ * Compute the 0-1 fraction of a gauge arc for a raw metric value against the
+ * value that should visually read as "full" (`max`).
+ *
+ * This clips only the arc geometry. Callers must format and display the raw
+ * `value` passed in, never the fraction this returns -- RiskGauge's `format`
+ * callback used to be handed the clipped fraction instead of the real value,
+ * so once a metric exceeded its assumed max (e.g. a near-certain-default
+ * loan's pd_12m going well past the 10% the PD gauge was scaled for) the
+ * gauge silently displayed the capped value instead of the real one.
+ */
+export function gaugeFraction(value: number, max: number): number {
+  if (!(max > 0)) return 0;
+  return Math.min(Math.max(value / max, 0), 1);
+}
+
 /** Map IFRS 9 stage number to display label */
 export function stageLabel(stage: number): string {
   return { 1: "Stage 1", 2: "Stage 2", 3: "Stage 3" }[stage] ?? "Unknown";

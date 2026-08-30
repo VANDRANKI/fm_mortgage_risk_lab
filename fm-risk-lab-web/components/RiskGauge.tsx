@@ -1,16 +1,17 @@
 "use client";
 import { motion } from "framer-motion";
+import { gaugeFraction } from "@/lib/utils";
 
 interface RiskGaugeProps {
   label:  string;
-  value:  number;  // 0 to 1
-  format?: (v: number) => string;
+  value:  number;  // raw metric value, e.g. a fraction like 0.15 for 15%
+  max?:   number;  // value at which the arc reads as full (display is never clipped)
+  format?: (v: number) => string;  // formats the raw `value`, not the arc fraction
   color?: string;
 }
 
-export default function RiskGauge({ label, value, format, color = "#22d3ee" }: RiskGaugeProps) {
-  const clipped   = Math.min(Math.max(value, 0), 1);
-  const pct       = clipped * 100;
+export default function RiskGauge({ label, value, max = 1, format, color = "#22d3ee" }: RiskGaugeProps) {
+  const fraction  = gaugeFraction(value, max);
   const displayFn = format ?? ((v: number) => `${(v * 100).toFixed(2)}%`);
 
   // SVG arc parameters
@@ -19,7 +20,7 @@ export default function RiskGauge({ label, value, format, color = "#22d3ee" }: R
   const cy = 60;
   const strokeWidth = 8;
   const circumference = Math.PI * r; // half-circle circumference
-  const offset = circumference * (1 - clipped);
+  const offset = circumference * (1 - fraction);
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -46,7 +47,7 @@ export default function RiskGauge({ label, value, format, color = "#22d3ee" }: R
         />
         {/* Value text */}
         <text x={cx} y={cy - 4} textAnchor="middle" fill="white" fontSize="13" fontWeight="bold">
-          {displayFn(clipped)}
+          {displayFn(value)}
         </text>
         {/* Tick marks at 25% / 50% / 75% */}
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {

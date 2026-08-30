@@ -3,7 +3,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import RiskGauge from "@/components/RiskGauge";
 import { api, LoanPredictRequest, LoanPredictResponse } from "@/lib/api";
-import { fmtCurrency, fmtPct, riskColor, stageLabel, stageColor } from "@/lib/utils";
+import { fmtCurrency, fmtPct, fmtBps, riskColor, stageLabel, stageColor } from "@/lib/utils";
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
@@ -172,20 +172,23 @@ export default function LoanExplorerPage() {
               <div className="flex justify-around flex-wrap gap-6">
                 <RiskGauge
                   label="PD (12-Month)"
-                  value={result.pd_12m * 10}  // scale 0-10% → 0-1
-                  format={(v) => fmtPct(v / 10)}
+                  value={result.pd_12m}
+                  max={0.1}  // gauge reads "full" at 10% PD; the number shown is never clipped
+                  format={fmtPct}
                   color="#ef4444"
                 />
                 <RiskGauge
                   label="LGD"
                   value={result.lgd}
-                  format={(v) => fmtPct(v)}
+                  max={1}
+                  format={fmtPct}
                   color="#f59e0b"
                 />
                 <RiskGauge
                   label="ECL Rate"
-                  value={result.ecl_rate * 100}  // scale 0-1% → 0-1
-                  format={(v) => `${(v * 100).toFixed(0)} bps`}
+                  value={result.ecl_rate}
+                  max={0.01}  // gauge reads "full" at 100bps; the number shown is never clipped
+                  format={fmtBps}
                   color="#a78bfa"
                 />
               </div>

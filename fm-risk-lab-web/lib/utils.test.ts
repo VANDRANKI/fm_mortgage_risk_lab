@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { scenarioDeltaMessage } from "./utils.ts";
+import { scenarioDeltaMessage, gaugeFraction } from "./utils.ts";
 
 test("baseline (delta_pct === 0) is labeled baseline", () => {
   const msg = scenarioDeltaMessage(0);
@@ -47,4 +47,31 @@ test("every finite delta_pct produces exactly one non-empty message", () => {
     assert.ok(["baseline", "improved", "mild", "severe"].includes(msg.tone));
     assert.ok(msg.text.length > 0);
   }
+});
+
+test("gaugeFraction: value within [0, max] scales linearly", () => {
+  assert.equal(gaugeFraction(0, 0.1), 0);
+  assert.equal(gaugeFraction(0.05, 0.1), 0.5);
+  assert.equal(gaugeFraction(0.1, 0.1), 1);
+});
+
+test("gaugeFraction: clips the arc fraction for out-of-range values, but callers must format the raw value", () => {
+  // Regression: a near-certain-default loan predicted by the PD model
+  // (pd_12m = 1.0, i.e. 100%) against the Loan Explorer PD gauge's max=0.1
+  // (10%). Before this fix, RiskGauge formatted this clipped fraction
+  // instead of the real pd_12m, so the gauge label showed "10.00%" for a
+  // loan the model scored at 100% PD -- see ecl_engine verification for a
+  // seriously-delinquent, low-FICO/high-LTV loan under the GFC scenario,
+  // which produced pd_pred=1.0 and ecl_rate=0.334 (33.4%, far past the ECL
+  // Rate gauge's max=0.01).
+  assert.equal(gaugeFraction(1.0, 0.1), 1);       // arc pins at full
+  assert.equal(gaugeFraction(0.334, 0.01), 1);    // arc pins at full
+  // The fraction is only for the arc geometry -- RiskGauge must display the
+  // original `value` (1.0, 0.334), never this returned fraction.
+});
+
+test("gaugeFraction: negative values clip to 0, non-positive max is safe", () => {
+  assert.equal(gaugeFraction(-0.5, 0.1), 0);
+  assert.equal(gaugeFraction(0.05, 0), 0);
+  assert.equal(gaugeFraction(0.05, -1), 0);
 });
