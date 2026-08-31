@@ -8,7 +8,7 @@ import json
 import logging
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from src.api.schemas import ScenarioRequest
 from src.config.settings import DATA_PROCESSED, SCENARIOS, PORTFOLIO_BASELINE
@@ -23,9 +23,22 @@ _PORTFOLIO: pd.DataFrame | None = None
 _BASELINE_ECL: float | None = None
 
 
-def _get_engine() -> ECLEngine:
+def _get_engine(request: Request) -> ECLEngine:
+    # main.py's lifespan hook preloads app.state.engine at startup so the
+    # PD/LGD joblib models are read from disk once, before the app serves
+    # its first request. This router (like loan.py before its own fix) kept
+    # a separate `global _ENGINE` instead of reading it, so the preloaded
+    # engine went unused and the first /scenario/run call paid the model
+    # -load cost a second time. Reuse the preloaded engine when it's there;
+    # fall back to the lazy singleton only if startup preloading failed or
+    # was skipped.
+    engine = getattr(request.app.state, "engine", None)
+    if engine is not None:
+        return engine
+
     global _ENGINE
     if _ENGINE is None:
+        log.warning("app.state.engine not set; lazily building a fallback ECLEngine.")
         _ENGINE = ECLEngine()
     return _ENGINE
 
@@ -88,12 +101,12 @@ def list_scenarios():
 
 
 @router.post("/run")
-def run_scenario(req: ScenarioRequest):
+def run_scenario(req: ScenarioRequest, request: Request):
     """
     Run a custom or pre-defined scenario and return portfolio ECL metrics.
     Baseline ECL is read from the pre-computed cache (no extra inference pass).
     """
-    engine    = _get_engine()
+    engine    = _get_engine(request)
     portfolio = _get_portfolio()
 
     macro_shock = {
