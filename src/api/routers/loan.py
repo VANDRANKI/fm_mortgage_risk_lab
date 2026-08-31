@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from src.api.schemas import LoanPredictRequest, LoanPredictResponse
 from src.models.ecl_engine import ECLEngine
@@ -18,9 +18,24 @@ log    = logging.getLogger(__name__)
 _ENGINE: ECLEngine | None = None
 
 
-def _get_engine() -> ECLEngine:
+def _get_engine(request: Request) -> ECLEngine:
+    # main.py's lifespan hook preloads app.state.engine at startup precisely
+    # so the PD/LGD joblib models are read from disk once, before the first
+    # request, instead of on it. This module used to ignore that and keep
+    # its own separate `global _ENGINE`, so the preload was pure waste: it
+    # built an ECLEngine that nothing ever read, and the first call to
+    # /loan/predict still paid the full disk-load cost itself -- the exact
+    # cold-start latency the preload comment says it avoids. Reuse the
+    # preloaded engine when it's there; fall back to a lazily-built one
+    # only if startup preloading failed or was skipped (e.g. in tests that
+    # call this router without running the app's lifespan).
+    engine = getattr(request.app.state, "engine", None)
+    if engine is not None:
+        return engine
+
     global _ENGINE
     if _ENGINE is None:
+        log.warning("app.state.engine not set; lazily building a fallback ECLEngine.")
         _ENGINE = ECLEngine()
     return _ENGINE
 
@@ -36,9 +51,9 @@ def _risk_level(pd: float) -> str:
 
 
 @router.post("/predict", response_model=LoanPredictResponse)
-def predict_loan(req: LoanPredictRequest):
+def predict_loan(req: LoanPredictRequest, request: Request):
     """Predict PD, LGD, ECL and IFRS 9 stage for a single loan."""
-    engine = _get_engine()
+    engine = _get_engine(request)
 
     # Build a one-row DataFrame matching the expected feature schema
     loan_df = pd.DataFrame([{
