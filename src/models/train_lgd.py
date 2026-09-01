@@ -163,16 +163,11 @@ def train_lgd_models() -> None:
     )
     log.info("  Best XGB iteration: %d", xgb_reg.best_iteration)
 
-    # Clip predictions to [0, 1]
-    class ClippedXGBRegressor:
-        def __init__(self, model, pre):
-            self.model = model
-            self.pre   = pre
-
-        def predict(self, X):
-            Xt = self.pre.transform(X)
-            return self.model.predict(Xt).clip(0, 1)
-
+    # Predictions are clipped to [0, 1] by every caller instead (see the
+    # ClippedXGBRegressor removed here: it was never instantiated, and
+    # src/models/ecl_engine.py's predict_lgd() already does
+    # `self.lgd_model.predict(Xt).clip(0, 1)` on whatever raw model is
+    # dumped to lgd_xgb.joblib below).
     xgb_pipe = {"preprocessor": pre_fit.named_steps["pre"], "model": xgb_reg}
     joblib.dump(xgb_pipe, MODELS_DIR / "lgd_xgb.joblib")
 
