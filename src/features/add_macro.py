@@ -48,8 +48,15 @@ def add_macro_to_panel() -> None:
 
 def add_macro_to_outcomes() -> None:
     """
-    Attach macro conditions as of origination month and default month
-    to the per-loan outcomes table.
+    Attach macro conditions as of origination month to the per-loan
+    outcomes table.
+
+    Only origination-month macro is computed here (unrate_at_orig,
+    hpi_at_orig, hpi_yoy_at_orig, rate_at_orig, fsi_at_orig). Macro at
+    default is computed separately, and independently, in
+    build_lgd_dataset.build_lgd_dataset() against the raw fred_macro
+    table -- this function's output (loan_outcomes_with_macro.parquet)
+    is not one of its inputs.
     """
     log.info("Merging macro into loan outcomes ...")
 
