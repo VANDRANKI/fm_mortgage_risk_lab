@@ -62,9 +62,21 @@ def build_lgd_dataset() -> None:
     # ── Macro conditions at default time ─────────────────────────────────────
     # Compute approximate default date = origination + time_to_default_months
     # Use days (30.44 days/month) to avoid ambiguous unit "M"
+    #
+    # time_to_default_months is NaN for exactly the loans lgd_synthetic exists
+    # for: defaulted but not liquidated (still in foreclosure at data cutoff,
+    # or missing proceeds) -- build_panel.py's _fill_missing_default_timing()
+    # only backfills liquidated loans from their zero-balance age and leaves
+    # non-liquidated ones untouched. Falling back to 0 here priced those
+    # loans' macro conditions as of origination month, while
+    # LOAN_AGE_AT_DEFAULT two lines below already falls back to
+    # observed_months (the loan's last observed age) for the same NaN rows --
+    # use the same fallback here so the macro-at-default lookup and the age
+    # feature describe the same point in time for these loans.
+    lgd_df["default_time"] = lgd_df["time_to_default_months"].fillna(lgd_df["observed_months"])
     lgd_df["default_date"] = (
         pd.to_datetime(lgd_df["ORIGINATION_DATE"])
-        + pd.to_timedelta(lgd_df["time_to_default_months"].fillna(0) * 30.44, unit="D")
+        + pd.to_timedelta(lgd_df["default_time"] * 30.44, unit="D")
     ).dt.to_period("M").dt.to_timestamp()
 
     lgd_df = lgd_df.merge(
@@ -80,9 +92,10 @@ def build_lgd_dataset() -> None:
     lgd_df.drop(columns=["default_date"], inplace=True)
 
     # ── Loan age at default ───────────────────────────────────────────────────
-    lgd_df["LOAN_AGE_AT_DEFAULT"] = lgd_df["time_to_default_months"].fillna(
-        lgd_df["observed_months"]
-    ).astype("float32")
+    # Same fallback as default_time above, so this and the macro-at-default
+    # features agree on when these loans defaulted.
+    lgd_df["LOAN_AGE_AT_DEFAULT"] = lgd_df["default_time"].astype("float32")
+    lgd_df.drop(columns=["default_time"], inplace=True)
 
     # ── Select features ───────────────────────────────────────────────────────
     feature_cols = [
