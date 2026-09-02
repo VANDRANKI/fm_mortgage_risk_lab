@@ -31,7 +31,15 @@ class TestLoanPurposeCodeNine:
     def test_loan_purpose_nine_is_kept(self):
         df = pd.DataFrame({"LOAN_PURPOSE": ["P", "C", "9", " 9 ", ""]})
         out = _clean_string_columns(df, ["LOAN_PURPOSE"])
-        assert out["LOAN_PURPOSE"].tolist() == ["P", "C", "9", "9", pd.NA]
+        values = out["LOAN_PURPOSE"].tolist()
+        # Compare the non-missing values directly and check the last one with
+        # pd.isna() rather than `== pd.NA`: pandas' own .replace("", pd.NA)
+        # does not guarantee returning the pd.NA singleton for every dtype
+        # (e.g. it comes back as float nan on pandas 3.0 for an object-dtype
+        # column), and `nan == pd.NA` raises "boolean value of NA is
+        # ambiguous" instead of comparing false.
+        assert values[:4] == ["P", "C", "9", "9"]
+        assert pd.isna(values[4])
 
     def test_loan_purpose_blank_is_still_missing(self):
         df = pd.DataFrame({"LOAN_PURPOSE": ["", "   "]})
