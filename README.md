@@ -1,6 +1,7 @@
 # Mortgage Credit Risk & Stress Testing Lab
 
 [![Python application](https://github.com/VANDRANKI/fm_mortgage_risk_lab/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/VANDRANKI/fm_mortgage_risk_lab/actions/workflows/python-app.yml)
+[![Web app test and build](https://github.com/VANDRANKI/fm_mortgage_risk_lab/actions/workflows/web-app.yml/badge.svg?branch=main)](https://github.com/VANDRANKI/fm_mortgage_risk_lab/actions/workflows/web-app.yml)
 
 **Live Demo:** *https://fm-mortgage-risk-lab.vercel.app/*
 
