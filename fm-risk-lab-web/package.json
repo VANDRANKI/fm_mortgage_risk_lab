@@ -1,6 +1,7 @@
 {
   "name": "fm-risk-lab-web",
   "version": "0.1.0",
+  "description": "Next.js dashboard for the Mortgage Credit Risk & Stress Testing Lab: portfolio ECL summary, stress-test sliders, and single-loan risk scoring.",
   "private": true,
   "scripts": {
     "dev": "next dev",
