@@ -30,6 +30,7 @@ import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.frozen import FrozenEstimator
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -111,7 +112,7 @@ def build_calibrated_pipeline(fitted_preprocessor, X_val_transformed, y_val, fit
     silently drops information for any category absent from the validation
     split at serving time if the width happens to still match.
     """
-    calibrated_clf = CalibratedClassifierCV(fitted_clf, cv="prefit", method="isotonic")
+    calibrated_clf = CalibratedClassifierCV(FrozenEstimator(fitted_clf), method="isotonic")
     calibrated_clf.fit(X_val_transformed, y_val)
     return Pipeline([("pre", fitted_preprocessor), ("clf", calibrated_clf)])
 
