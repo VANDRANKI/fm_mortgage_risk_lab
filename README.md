@@ -88,6 +88,16 @@ node node_modules/next/dist/bin/next dev --port 3000
 
 Open http://localhost:3000 : Done, you're live!
 
+### Run the tests
+
+The Python tests use small synthetic inputs, so they need neither the Freddie Mac files nor the trained models:
+
+```bash
+py -3 -m pytest
+```
+
+The website has its own tests: `cd fm-risk-lab-web` then `npm test`.
+
 ---
 
 ## Website pages
