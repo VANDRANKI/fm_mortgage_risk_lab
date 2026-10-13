@@ -118,14 +118,25 @@ def _build_vintage_curves(panel: pd.DataFrame) -> None:
     panel["obs_year"]     = pd.to_datetime(panel["REPORTING_DATE"]).dt.year
     panel["vintage_year"] = panel["VINTAGE_YEAR"]
 
+    keys = ["vintage_year", "obs_year"]
+    # IS_DEFAULTED is a monthly flag, so summing it counts a loan once for every
+    # month it is 90+ days delinquent. Count each loan once per cell instead,
+    # otherwise default_rate is a loan-month ratio and can exceed 1.
     curves = (
-        panel.groupby(["vintage_year", "obs_year"])
-        .agg(
-            total_loans=("LOAN_SEQUENCE_NUMBER", "nunique"),
-            defaulted=("IS_DEFAULTED", "sum"),
-        )
+        panel.groupby(keys)["LOAN_SEQUENCE_NUMBER"]
+        .nunique()
+        .rename("total_loans")
         .reset_index()
     )
+    defaulted = (
+        panel[panel["IS_DEFAULTED"].astype(bool)]
+        .groupby(keys)["LOAN_SEQUENCE_NUMBER"]
+        .nunique()
+        .rename("defaulted")
+        .reset_index()
+    )
+    curves = curves.merge(defaulted, on=keys, how="left")
+    curves["defaulted"] = curves["defaulted"].fillna(0).astype(int)
     curves["default_rate"] = curves["defaulted"] / curves["total_loans"]
 
     out = PORTFOLIO_BASELINE / "vintage_curves.parquet"
