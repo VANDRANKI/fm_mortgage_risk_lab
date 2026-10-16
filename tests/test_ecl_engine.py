@@ -250,3 +250,119 @@ class TestComputeECLOnFilteredFrame:
         out = engine.compute_ecl(df)
         assert out["ecl"].notna().all()
         assert (out["ecl"] > 0).all()
+
+
+class _FakePDModel:
+    """Records the frame it is given and returns a fixed probability."""
+
+    def __init__(self, prob=0.2, fail=False):
+        self.prob = prob
+        self.fail = fail
+        self.seen = None
+
+    def predict_proba(self, X):
+        self.seen = X
+        if self.fail:
+            raise ValueError("boom")
+        return np.column_stack([1 - np.full(len(X), self.prob), np.full(len(X), self.prob)])
+
+
+class _FakeLGDPre:
+    def __init__(self):
+        self.seen = None
+
+    def transform(self, X):
+        self.seen = X
+        return X
+
+
+class _FakeLGDModel:
+    def __init__(self, values, fail=False):
+        self.values = np.asarray(values, dtype=float)
+        self.fail = fail
+
+    def predict(self, X):
+        if self.fail:
+            raise ValueError("boom")
+        return self.values
+
+
+class TestPredictPD:
+    def test_model_probability_is_returned_and_macro_injected(self, engine):
+        engine.pd_model = _FakePDModel(prob=0.2)
+        df = pd.DataFrame({"CREDIT_SCORE": [700.0, 650.0]})
+        out = engine.predict_pd(df, BASELINE_MACRO)
+        np.testing.assert_allclose(out, [0.2, 0.2])
+        seen = engine.pd_model.seen
+        assert (seen["unemployment_rate"] == BASELINE_MACRO["unemployment_rate"]).all()
+        assert (seen["DLQ_STATUS_INT"] == 0).all()
+        # The caller's frame is not modified.
+        assert "unemployment_rate" not in df.columns
+
+    def test_model_failure_falls_back_to_heuristic(self, engine):
+        engine.pd_model = _FakePDModel(fail=True)
+        df = pd.DataFrame({"CREDIT_SCORE": [700.0, 650.0]})
+        out = engine.predict_pd(df, BASELINE_MACRO)
+        expected = engine._heuristic_pd(df, BASELINE_MACRO)
+        np.testing.assert_allclose(np.asarray(out), np.asarray(expected))
+
+    def test_loan_age_is_derived_from_the_panel_columns(self, engine):
+        engine.pd_model = _FakePDModel()
+        engine.predict_pd(pd.DataFrame({"LOAN_AGE_MONTHS": [12, 30]}), BASELINE_MACRO)
+        assert engine.pd_model.seen["LOAN_AGE_AT_OBS"].tolist() == [12, 30]
+
+        engine.predict_pd(pd.DataFrame({"LOAN_AGE": [5, 6]}), BASELINE_MACRO)
+        assert engine.pd_model.seen["LOAN_AGE_AT_OBS"].tolist() == [5, 6]
+
+    def test_existing_loan_age_at_obs_is_kept(self, engine):
+        engine.pd_model = _FakePDModel()
+        df = pd.DataFrame({"LOAN_AGE_AT_OBS": [7, 8], "LOAN_AGE_MONTHS": [99, 99]})
+        engine.predict_pd(df, BASELINE_MACRO)
+        assert engine.pd_model.seen["LOAN_AGE_AT_OBS"].tolist() == [7, 8]
+
+    def test_rate_spread_uses_the_baseline_rate_not_the_stressed_rate(self, engine):
+        """RATE_SPREAD is an origination feature, so a rate shock must not move it."""
+        engine.pd_model = _FakePDModel()
+        stressed = engine._apply_scenario(BASELINE_MACRO, {"rate_shock": 2.0})
+        df = pd.DataFrame({"ORIGINAL_INTEREST_RATE": [4.65]})
+        engine.predict_pd(df, stressed)
+        assert engine.pd_model.seen["RATE_SPREAD"].iloc[0] == pytest.approx(4.65 - 3.65)
+
+
+class TestPredictLGD:
+    def test_model_output_is_clipped_to_unit_interval(self, engine):
+        engine.lgd_pre = _FakeLGDPre()
+        engine.lgd_model = _FakeLGDModel([-0.2, 0.4, 1.7])
+        df = pd.DataFrame({"ORIGINAL_LTV": [80.0, 85.0, 90.0]})
+        out = engine.predict_lgd(df, BASELINE_MACRO)
+        np.testing.assert_allclose(out, [0.0, 0.4, 1.0])
+
+    def test_macro_is_mapped_to_the_at_default_columns(self, engine):
+        engine.lgd_pre = _FakeLGDPre()
+        engine.lgd_model = _FakeLGDModel([0.3])
+        engine.predict_lgd(pd.DataFrame({"ORIGINAL_LTV": [80.0]}), BASELINE_MACRO)
+        seen = engine.lgd_pre.seen
+        assert seen["unemployment_rate_at_default"].iloc[0] == BASELINE_MACRO["unemployment_rate"]
+        assert seen["hpi_yoy_chg_at_default"].iloc[0] == BASELINE_MACRO["hpi_yoy_chg"]
+        assert seen["rate_at_default"].iloc[0] == BASELINE_MACRO["mortgage_rate_30y"]
+        assert seen["fsi_at_default"].iloc[0] == BASELINE_MACRO["financial_stress_idx"]
+
+    def test_loan_age_at_default_sources(self, engine):
+        engine.lgd_pre = _FakeLGDPre()
+        engine.lgd_model = _FakeLGDModel([0.3, 0.3])
+
+        engine.predict_lgd(pd.DataFrame({"LOAN_AGE_MONTHS": [10, 20]}), BASELINE_MACRO)
+        assert engine.lgd_pre.seen["LOAN_AGE_AT_DEFAULT"].tolist() == [10, 20]
+
+        engine.predict_lgd(pd.DataFrame({"LOAN_AGE": [3, 4]}), BASELINE_MACRO)
+        assert engine.lgd_pre.seen["LOAN_AGE_AT_DEFAULT"].tolist() == [3, 4]
+
+        engine.predict_lgd(pd.DataFrame({"ORIGINAL_LTV": [80.0, 80.0]}), BASELINE_MACRO)
+        assert engine.lgd_pre.seen["LOAN_AGE_AT_DEFAULT"].tolist() == [24.0, 24.0]
+
+    def test_model_failure_falls_back_to_heuristic(self, engine):
+        engine.lgd_pre = _FakeLGDPre()
+        engine.lgd_model = _FakeLGDModel([0.3], fail=True)
+        df = pd.DataFrame({"ORIGINAL_LTV": [95.0]})
+        out = engine.predict_lgd(df, BASELINE_MACRO)
+        np.testing.assert_allclose(out, engine._heuristic_lgd(df, BASELINE_MACRO))
