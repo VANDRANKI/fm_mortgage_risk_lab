@@ -122,9 +122,11 @@ class ECLEngine:
         Used for demo/fallback only.
         """
         # Base PD from FICO and LTV
-        fico    = df.get("CREDIT_SCORE", pd.Series([700] * len(df))).fillna(700)
-        ltv     = df.get("ORIGINAL_LTV", pd.Series([80] * len(df))).fillna(80)
-        dti     = df.get("ORIGINAL_DTI",  pd.Series([35] * len(df))).fillna(35)
+        # Defaults for absent columns carry df.index so they align with any
+        # column that is present, even when the frame is a filtered subset.
+        fico    = df.get("CREDIT_SCORE", pd.Series(700, index=df.index)).fillna(700)
+        ltv     = df.get("ORIGINAL_LTV", pd.Series(80, index=df.index)).fillna(80)
+        dti     = df.get("ORIGINAL_DTI",  pd.Series(35, index=df.index)).fillna(35)
         unrate  = macro.get("unemployment_rate", 5.0)
 
         logit = (
@@ -138,7 +140,7 @@ class ECLEngine:
 
     def _heuristic_lgd(self, df: pd.DataFrame, macro: pd.Series) -> np.ndarray:
         """Simple LTV-based LGD heuristic."""
-        ltv      = df.get("ORIGINAL_LTV",     pd.Series([80] * len(df))).fillna(80)
+        ltv      = df.get("ORIGINAL_LTV",     pd.Series(80, index=df.index)).fillna(80)
         hpi_chg  = float(macro.get("hpi_yoy_chg", 0.0))
         # Stressed LTV = original LTV / (1 + HPI change %).
         # np.clip rather than .clip: when hpi_yoy_chg is absent from the macro
@@ -228,7 +230,7 @@ class ECLEngine:
         delinquent (0 current, 1 is 30-59 dpd, 3 is 90+ dpd), so the
         thresholds are compared in months, not days.
         """
-        dlq = df.get("DLQ_STATUS_INT", pd.Series(np.zeros(len(df)))).fillna(0)
+        dlq = df.get("DLQ_STATUS_INT", pd.Series(0, index=df.index)).fillna(0)
         stages = np.where(
             (pd_arr > STAGE3_MIN_PD) | (dlq >= STAGE3_MIN_DLQ), 3,
             np.where(

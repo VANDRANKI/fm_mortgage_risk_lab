@@ -205,3 +205,48 @@ class TestScenario:
         base = engine.compute_portfolio_ecl(df)
         stressed = engine.compute_portfolio_ecl(df, {"unemployment_shock": 4.0})
         assert stressed["total_ecl"] > base["total_ecl"]
+
+
+class TestHeuristicPD:
+    def test_missing_columns_on_a_filtered_index(self, engine):
+        """Regression: the defaults for absent columns were built on a fresh
+        0..n-1 index, so a frame with a non-default index (a filtered subset
+        of a portfolio) that was missing one of the columns got NaN back."""
+        df = pd.DataFrame(
+            {"CREDIT_SCORE": [650.0, 720.0], "ORIGINAL_LTV": [90.0, 70.0]},
+            index=[10, 11],
+        )
+        out = engine._heuristic_pd(df, BASELINE_MACRO)
+        assert len(out) == 2
+        assert np.isfinite(out).all()
+
+    def test_same_result_regardless_of_index(self, engine):
+        data = {"CREDIT_SCORE": [650.0, 720.0], "ORIGINAL_LTV": [90.0, 70.0]}
+        plain = engine._heuristic_pd(pd.DataFrame(data), BASELINE_MACRO)
+        shifted = engine._heuristic_pd(pd.DataFrame(data, index=[10, 11]), BASELINE_MACRO)
+        np.testing.assert_allclose(np.asarray(plain), np.asarray(shifted))
+
+    def test_worse_credit_gives_higher_pd(self, engine):
+        df = pd.DataFrame({"CREDIT_SCORE": [620.0, 780.0]})
+        out = np.asarray(engine._heuristic_pd(df, BASELINE_MACRO))
+        assert out[0] > out[1]
+
+    def test_all_defaults_when_no_loan_columns(self, engine):
+        out = np.asarray(engine._heuristic_pd(pd.DataFrame(index=[3, 4, 5]), BASELINE_MACRO))
+        assert out.shape == (3,)
+        assert np.isfinite(out).all()
+
+
+class TestComputeECLOnFilteredFrame:
+    def test_ecl_is_finite_for_a_non_default_index(self, engine):
+        df = pd.DataFrame(
+            {
+                "CREDIT_SCORE": [650.0, 720.0],
+                "ORIGINAL_LTV": [90.0, 70.0],
+                "CURRENT_ACTUAL_UPB": [200000.0, 150000.0],
+            },
+            index=[40, 41],
+        )
+        out = engine.compute_ecl(df)
+        assert out["ecl"].notna().all()
+        assert (out["ecl"] > 0).all()
